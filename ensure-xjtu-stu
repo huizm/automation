@@ -1,0 +1,43 @@
+#!/bin/zsh
+
+# wireless connectivity with XJTU_STU AP can be *unstable*
+# this script checks the wireless association status every 10s,
+# and will reconnect if the connection is lost
+
+rfkill unblock all
+nic=`ip a|grep wlp|awk '{print $2}'`
+echo 'found wireless network interfaces'
+echo $nic
+# remove trailing `:`
+nic=`echo $nic|head -1`
+nic=${nic:0:-1}
+echo 'will pick up the first one: $nic'
+trap "exit" INT
+while true; do
+        # XJTU_STU gives you a 10.180.0.0/16 IP
+        ip a | grep 10.180 > /dev/null
+        # get previous cmd's return value
+        retVal=$?
+        echo -n '.'
+        if [ $retVal -ne 0 ]; then
+                ip a | grep 2001:250 > /dev/null
+                retVal=$?
+                if [ $retVal -ne 0 ]; then
+                        # if we have neither IPv4 nor IPv6:
+                        echo 'reconnect'
+                        # stop conflicting network-related services
+                        systemctl  stop NetworkManager wpa_supplicant
+                        # note XJTU_STU is an OPEN wireless network
+                        ip link set $nic down
+                        ip link set $nic up
+                        iw dev $nic connect XJTU_STU
+                        # check connectivity every 10s
+                        sleep 10;
+                fi
+        else
+                # wait 8s for the handshake to finish
+                sleep 8;
+        fi
+
+done
+exit $retVal
